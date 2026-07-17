@@ -29,8 +29,11 @@ jobs:
           EOF
 
       - name: Retry Loop
+        env:
+          SSH_KEY: ${{ secrets.OCI_SSH_KEY }}
         run: |
           set +e
+          echo "$SSH_KEY" > /tmp/oci_key.pub
           COUNT=1
           END_TIME=$((SECONDS+20000))
           while [ $SECONDS -lt $END_TIME ]; do
@@ -44,7 +47,7 @@ jobs:
               --image-id "${{ secrets.OCI_IMAGE }}" \
               --assign-public-ip true \
               --display-name "AlwaysFree-Ubuntu24" \
-              --metadata "{\"ssh_authorized_keys\":\"${{ secrets.OCI_SSH_KEY }}\"}" 2>&1)
+              --ssh-authorized-keys-file /tmp/oci_key.pub 2>&1)
 
             if [[ "$OUTPUT" == *"lifecycle-state"* && "$OUTPUT" != *"ServiceError"* ]]; then
               echo "SUCCESS! Server Ban Gaya!"

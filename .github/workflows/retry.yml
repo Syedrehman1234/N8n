@@ -2,8 +2,8 @@ name: OCI Ampere Retry
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Har 15 minute baad workflow khud start hoga
-  workflow_dispatch:       # Is se aap khud bhi manual "Run" ka button daba sakte hain
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
 
 jobs:
   retry:
@@ -30,13 +30,14 @@ jobs:
 
       - name: Retry Loop
         run: |
+          set +e
           COUNT=1
-          END_TIME=$((SECONDS+20000)) # Yeh takreeban 5.5 ghante chalega
+          END_TIME=$((SECONDS+20000))
           while [ $SECONDS -lt $END_TIME ]; do
             echo "[Attempt #$COUNT] $(date '+%H:%M:%S')"
             OUTPUT=$(oci compute instance launch \
               --compartment-id "${{ secrets.OCI_TENANCY }}" \
-              --availability-domain "UoGg:ME-DUBAI-1-AD-1" \
+              --availability-domain "QrDE:ME-DUBAI-1-AD-1" \
               --shape "VM.Standard.A1.Flex" \
               --shape-config '{"ocpus":2,"memoryInGBs":12}' \
               --subnet-id "${{ secrets.OCI_SUBNET }}" \
@@ -46,11 +47,11 @@ jobs:
               --metadata "{\"ssh_authorized_keys\":\"${{ secrets.OCI_SSH_KEY }}\"}" 2>&1)
 
             if [[ "$OUTPUT" == *"lifecycle-state"* && "$OUTPUT" != *"ServiceError"* ]]; then
-              echo "🎉 SUCCESS! Server Ban Gaya!"
+              echo "SUCCESS! Server Ban Gaya!"
               echo "$OUTPUT"
               exit 0
             fi
-            echo "$OUTPUT" | head -n 5
+            echo "$OUTPUT" | head -5
             COUNT=$((COUNT+1))
             sleep 20
           done

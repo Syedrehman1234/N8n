@@ -1,0 +1,56 @@
+name: OCI Ampere Retry
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # Har 15 minute baad workflow khud start hoga
+  workflow_dispatch:       # Is se aap khud bhi manual "Run" ka button daba sakte hain
+
+jobs:
+  retry:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Setup OCI CLI
+        run: |
+          pip install oci-cli
+
+      - name: Configure OCI
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+          cat << EOF > ~/.oci/config
+          [DEFAULT]
+          user=${{ secrets.OCI_USER }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          tenancy=${{ secrets.OCI_TENANCY }}
+          region=me-dubai-1
+          key_file=~/.oci/oci_api_key.pem
+          EOF
+
+      - name: Retry Loop
+        run: |
+          COUNT=1
+          END_TIME=$((SECONDS+20000)) # Yeh takreeban 5.5 ghante chalega
+          while [ $SECONDS -lt $END_TIME ]; do
+            echo "[Attempt #$COUNT] $(date '+%H:%M:%S')"
+            OUTPUT=$(oci compute instance launch \
+              --compartment-id "${{ secrets.OCI_TENANCY }}" \
+              --availability-domain "UoGg:ME-DUBAI-1-AD-1" \
+              --shape "VM.Standard.A1.Flex" \
+              --shape-config '{"ocpus":2,"memoryInGBs":12}' \
+              --subnet-id "${{ secrets.OCI_SUBNET }}" \
+              --image-id "${{ secrets.OCI_IMAGE }}" \
+              --assign-public-ip true \
+              --display-name "AlwaysFree-Ubuntu24" \
+              --metadata "{\"ssh_authorized_keys\":\"${{ secrets.OCI_SSH_KEY }}\"}" 2>&1)
+
+            if [[ "$OUTPUT" == *"lifecycle-state"* && "$OUTPUT" != *"ServiceError"* ]]; then
+              echo "🎉 SUCCESS! Server Ban Gaya!"
+              echo "$OUTPUT"
+              exit 0
+            fi
+            echo "$OUTPUT" | head -n 5
+            COUNT=$((COUNT+1))
+            sleep 20
+          done
